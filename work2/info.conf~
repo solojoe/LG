@@ -1,0 +1,11 @@
+[db]
+db_port = 3306
+db_user = root
+db_host = 127.0.0.1
+db_pass = 19941017 
+db_name = BGP
+
+[label]
+radiop=re.compile(r'^traceroute:Traceroute$|^inet$|\btrace\b|\budp\b|\btr\b|\btraceroute\b|\b0\b|\b1\b|\b40\b|\bipv4\b|\b6\b|^yes$|^7$|^t$|^yak22-gw-02:cisco$|^-n$|^v4$',re.I)
+bsp=re.compile(r'\bmtr\b|\bping\b|\bPing\b|Do\s+NSLookup|^Reset\s+Form$|^Defaults$|^Clear\s+Form$|^Abort$')
+

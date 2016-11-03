@@ -1,0 +1,25 @@
+#!/usr/bin/python
+#encoding=utf-8
+
+import sys
+import socket
+import MySQLdb
+from gettracetmp import gettrace
+from threading import Thread
+import re
+import socket
+socket.setdefaulttimeout(300)
+
+def main():
+    
+    
+    urlip=socket.getaddrinfo("music.baidu.com.tag", None)
+    ip=urlip[0][4][0]
+    print ip    
+    
+        
+        
+if __name__=='__main__':
+    main()
+         
+        

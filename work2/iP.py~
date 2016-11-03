@@ -1,0 +1,17 @@
+#!/usr/bin/python
+#encoding=utf-8
+
+import sys
+
+f=open("1.txt","r")
+fi=open("2.txt","a")
+while True:
+   line=f.readline()
+   if line:
+	lines=line.split("\t")
+	line2=lines[0].split(".")
+	li=line2[0]+'.'+line2[1]+'.'+line2[2]+'.122'
+	fi.write(li)
+	print li
+   else:
+	break
