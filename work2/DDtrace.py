@@ -1,23 +1,19 @@
 #!/usr/bin/python
 #encoding=utf-8
 import sys
-import time
 import urllib
 import urllib2  
 from urllib2 import *
 from bs4 import BeautifulSoup
 import re
 import socket
-import MySQLdb
 import urlparse
 import mechanize
 import httplib
-import telnetlib
 import os
-import cookielib
 import ConfigParser
 import datetime
-import time
+import signal
 
 socket.setdefaulttimeout(150)
 cf = ConfigParser.ConfigParser()
@@ -40,17 +36,7 @@ class gettrace:
         
         #不同标签的匹配
         self.attrs=['submit','hidden'] 
-        self.radiop=re.compile(cf.get("label", "radiop"),re.I) #radio标签正则匹配式
-        self.checkboxp=re.compile(cf.get("label", "checkboxp")) #checkbox标签正则匹配式
-        self.formpframe=re.compile(cf.get("label", "formpframe")) #未提交参数前的frame标签正则匹配式
-        self.formpiframe=re.compile(cf.get("label", "formpiframe")) #未提交参数前的iframe标签正则匹配式
-        self.resultiframe=re.compile(cf.get("label", "resultiframe")) #获取结果时候的iframe标签正则匹配式
-        self.buttonp=re.compile(cf.get("label", "buttonp"),re.I)  #button标签正则匹配式
-        self.bsp=re.compile(cf.get("label", "bsp"),re.I)  #button类型submit标签正则匹配式
-        self.actionp=re.compile(cf.get("label", "actionp")) #action标签正则匹配式
-        self.srouter=re.compile(cf.get("label", "srouter"))  #router标签正则匹配式
-        self.optionp=re.compile(cf.get("label", "optionp"),re.I) #option标签正则匹配式
-        self.selectp=re.compile(cf.get("label", "selectp"))  #select标签正则匹配式
+        self.buttonp=re.compile('traceroute',re.I)  #button标签正则匹配式
         self.formsp=re.compile(cf.get("label", "formsp"),re.I) #无效form标签正则匹配式
         self.fp=re.compile(cf.get("label", "fp"))  #有效form标签正则匹配式
 
@@ -60,19 +46,27 @@ class gettrace:
         self.p=re.compile(cf.get("result", "p"),re.I) #结果匹配（traceroute结果在一起，中间无html代码分割）  
         self.pat=re.compile(cf.get("result", "pat")) #结果匹配（traceroute结果不在一起，中间有html代码分割）  
         self.asq=re.compile(cf.get("result", "asq"),re.I)#结果格式统一化
+        self.FunName=["MechanizeForm","UrllibForm","Twicetraceroute","DirectMechanize","DirectRequest","NotInForm"]
+        self.effectlable=["radio","checkbox","frame","iframe","hidden","option","select"]
+        self.tags={'radio':['invalid'],"checkbox":['invalid'],'frame':['invalid'],"iframe":['invalid'],'hidden':['invalid'],'option':['invalid'],'select':['invalid']}
     def __call__(self):
-        apply(self.m,())
-    def m(self):
+        apply(self.ReadingInfo,())
+    def ReadingInfo(self):
         self.time1=time.time()#记录时间
         self.specaillist=[] #一些特殊的服务器
-        for j in cf.options("masn"):
-            a=cf.get("masn", j).split(',')
+        for j in cf.options(self.server):
+            if j in self.effectlable :
+                a=cf.get(self.server, j).split(',')
+                for i in a :
+                    self.tags[j].append(i)
+        for j in cf.options("SpecialServer"):
+            a=cf.get("SpecialServer", j).split(',')
             self.specaillist.append(a)
-        functionname= "self.m"+cf.get(self.server, "fun")+"()"
+        functionname= "self."+self.FunName[int(cf.get(self.server, "function"))-1]+"()"
         exec(functionname)#动态加载模块
     
     
-    def m1(self):
+    def  MechanizeForm(self):
          try:                                    #直接爬虫         
             br=mechanize.Browser()
             f=br.open(self.url) 
@@ -91,7 +85,7 @@ class gettrace:
                 flag=0
                 tagframes=soup.findAll('frame')
                 for tagframe in tagframes:
-                    if tagframe.has_key('src') and re.search(self.formpframe,tagframe['src']):
+                    if tagframe.has_key('src') and re.search(self.tags['frame'],tagframe['src']):
                         self.url=urlparse.urljoin(self.url,tagframe['src'])
                         try:
                             f=urllib.urlopen(self.url)
@@ -106,15 +100,35 @@ class gettrace:
                         break
                 if flag==0:
                     break   
-            f.close()
+            while(1): #真正的URL在iframe中
+                flag=0
+                tagframes=soup.findAll('iframe')
+                for tagframe in tagframes:
+                    if tagframe.has_key('src') and tagframe['src'] in self.tags['iframe']:
+                        self.url=urlparse.urljoin(self.url,tagframe['src'])
+                        try:
+                            f=urllib.urlopen(self.url)
+                            self.url=f.geturl()
+                            self.resulturl=self.url
+                            soup=BeautifulSoup(f)
+                        except Exception:
+                            print "an unexpected error!\n"
+                            sys.exit(1)
+                        f.close()
+                        flag=1
+                        break
+                if flag==0:
+                    break   
+            f.close() 
             self.tmpurl=self.url,"\n\n"  
             forms=soup.findAll('form')
             for form in forms:
                 if self.finish:
                     break
-                if re.search(self.fp,repr(form)) and (self.server not in  self.specaillist[1]):    #找到我们需要的from表单
-                    if not ( re.search(r'network_tools_iframe\.asp',self.url) or re.search(self.formsp,repr(form.contents)) ):
-                        continue
+                if len(forms)>1:
+                    if re.search(self.fp,repr(form)) :    #找到我们需要的from表单
+                        if not re.search(self.formsp,repr(form.contents)) :
+                            continue
                 self.list={}
                 self.post=0
                 self.tmpurl=self.url
@@ -122,41 +136,32 @@ class gettrace:
                     if form['method'].lower()=='post':
                         self.post=1
                 if form.has_key('action'): #action标签中有结果提交的URL
-                    self.tmpurl=urlparse.urljoin(self.url,form['action']) #解析URL
+                    self.tmpurl=urlparse.urljoin(self.url,form['action']) 
                 
                 inputs=form.findAll('input',{'name':True})       
-                for inp in inputs:#输入存在文本标签中
-                     if (not inp.has_key('type')) or ( inp['type'].lower() in ['text','textfield'] ): #text,textfield标签匹配
+                for inp in inputs:
+                     if (not inp.has_key('type')) or ( inp['type'].lower() in ['text','textfield'] ):
                          if inp.has_key('name') and (inp['name'] not in ["VIA"]):
                              if not ( inp.has_key('value') and inp['value'] and re.search(self.textp,inp['value']) ):
-                                 self.list[inp['name']]=self.ip
-                                 self.flag=1    
+                                 self.list[inp['name']]=self.ip   
                              elif inp.has_key('value'):
                                  self.list[inp['name']]=inp['value']
 
-                     elif (inp['type'].lower() in self.attrs) and inp.has_key('value'):#某些值可能存在于submit，button标签中
-                         if not ( inp['type'].lower()=='submit'  and ( re.search(r'QTYPE2|btt_show',inp['name']) or re.search(self.bsp,inp['value']) ) ):
+                     elif (inp['type'].lower() in self.attrs) and inp.has_key('value'):
+                         if (inp['value'] in self.tags['hidden'] )or ('Dynamic' in self.tags['hidden']):
                             self.list[inp['name']]=inp['value']
                       
 
-                     elif inp['type'].lower()=='radio' and inp.has_key('value') and re.search(self.radiop,inp['value']):#radio标签中的值
+                     elif inp['type'].lower()=='radio' and inp.has_key('value') and inp['value'] in self.tags['radio']:
                             self.list[inp['name']]=inp['value']
-                        #radio下特殊的固定值，根据变化自己增删改
-                            if (self.server in self.specaillist[3]):
-                                if(inp['name']==cf.items(self.server)[0][0]):
-                                     self.list[inp['name']]=int(cf.items(self.server)[0][1])
-
-                     elif inp['type'].lower()=='checkbox' and inp.has_key('value') and re.search(self.checkboxp,inp['value']) and (self.server not in self.specaillist[18]):#取checkbox标签中的有效值
+                     elif inp['type'].lower()=='checkbox' and inp.has_key('value') and inp['value'] in self.tags['checkbox']:
                          self.list[inp['name']]=inp['value']
-                     elif inp['type'].lower()=='checkbox' and  self.server in self.specaillist[4] :
-                         self.list[inp['name']]=cf.items(self.server)[1][1]
+                     elif inp['type'].lower()=='checkbox' and  (not  inp.has_key('value')) :
+                         if len(self.tags['checkbox'])>1: 
+                            self.list[inp['name']]=self.tags['checkbox'][1]
                      
                      elif inp['type'].lower()=='button' and inp.has_key('value') and re.search(self.buttonp,inp['value']):
                          self.list[inp['name']]=inp['value']     
-                     if (self.server in self.specaillist[5]): #input标签下一下匹配不到的固定值
-                                if(inp['name']==cf.items(self.server)[0][0]):
-                                     self.list[inp['name']]=int(cf.items(self.server)[0][1])
- 
                 #取select标签中的有效值
                 selects=form.findAll('select')
                 self.number=0
@@ -165,30 +170,22 @@ class gettrace:
                 for select in selects:
                     options=select.findAll('option')
                     for option in options:#option标签下几种取值
-                        if (self.server in self.specaillist[7]) and option.has_key('value'):#固定值
-                            self.list[select['name']]=cf.items(self.server)[0][1]
-                            break
-                        elif option.has_key('value') and re.search(self.optionp,option['value']):#直接取值
+                        if option.has_key('value') and option['value'] in self.tags['option']:#直接取值
                             self.list[select['name']]=option['value']
                             break
-                        elif (not option.has_key('value') ) and (option.string!=None) and re.search(r'TraceRoute\(TW\)|^No$|\b3\b|oslo-gw\.uninett\.no|^5$',option.string):  #HTML中取值
-                            self.list[select['name']]=option.string
+                        elif (not option.has_key('value') ) and (option.string!=None) :  #HTML中取值
+                            if option.string in self.tags['option'] :
+                                self.list[select['name']]=option.string
                             break
-                    i=1
-                    if re.search(self.selectp,select['name']) and (self.server in self.specaillist[8]):#多源点
-                        for option in options:
-                            self.list[select['name']]=option['value']
-                            if self.id==i:
-                                self.show()
-                                optionflag=1
-                            i=i+1
                 #多源点服务器循环traceroute所有服务器,服务器选择在option标签中
                 selects=form.findAll('select')
                 i=1
                 for select in selects:
                     options=select.findAll('option')
-                    if re.search(self.selectp,select['name']) and self.server in self.specaillist[0]:
+                    if select['name'] in self.tags['select'] and self.server in self.specaillist[0]:
                         for option in options:
+                            if option['value'] in self.tags['option']:
+                                    break
                             if option.string!=None and option.has_key('value'):
                                 if self.id==i:
                                     self.list[select['name']]=option['value']
@@ -198,23 +195,20 @@ class gettrace:
                 
                  #多源点服务器循环traceroute所有服务器,服务器选择在checkbox标签中
                 i=1
-                if self.server in self.specaillist[9]:
+                if self.server in self.specaillist[1]:
                     self.post=0
                     inputs=form.findAll('input',{'name':True})
-                    self.list['afPref']='preferV6'
                     for inp in inputs:
-                        if inp['type'].lower()=='checkbox' and re.search(self.srouter,inp['name']) :
+                        if inp['type'].lower()=='checkbox' and re.search('routers',inp['name']) :
                             self.number=self.number+1
                     for inp in inputs:
-                        if inp['type'].lower()=='checkbox' and  re.search(self.srouter,inp['name']):
+                        if inp['type'].lower()=='checkbox' and  re.search('routers',inp['name']):
                             if i==self.id:
                                 self.list[inp['name']]=inp['value']
                                 self.show()
                                 optionflag=1
                             i=i+1
-                #特殊网站中标签需要固定的值
-                if self.server in self.specaillist[6] :
-                    self.post=int(cf.items(self.server)[0][1])
+
                 if self.list and optionflag==0:    
                     self.show()   
 
@@ -223,7 +217,7 @@ class gettrace:
 
 
 
-    def m2(self):        # 伪装成浏览器                            
+    def  UrllibForm(self):        # 伪装成浏览器                            
         try:
             headers = ('User-Agent','Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11')
             opener = urllib2.build_opener()
@@ -236,17 +230,19 @@ class gettrace:
                 request=Request(self.url)
                 f=urlopen(request)       
             soup=BeautifulSoup(f)
-            if self.server in self.specaillist[21] and self.my5400==1: #特殊网站（二次提交）
+            if self.flag==0: #（二次提交）
                 soup=self.soup
+                self.flag = 1
         except :
                 pass
  
         else:
-            while(1): #真正的URL在iframe中
+            flag=0             
+            while(1):
                 flag=0
-                tagframes=soup.findAll('iframe')
+                tagframes=soup.findAll('frame')
                 for tagframe in tagframes:
-                    if tagframe.has_key('src') and re.search(self.formpiframe,tagframe['src']):
+                    if tagframe.has_key('src') and re.search(self.tags['frame'],tagframe['src']):
                         self.url=urlparse.urljoin(self.url,tagframe['src'])
                         try:
                             f=urllib.urlopen(self.url)
@@ -261,78 +257,90 @@ class gettrace:
                         break
                 if flag==0:
                     break   
+            while(1): 
+                flag=0
+                tagframes=soup.findAll('iframe')
+                for tagframe in tagframes:
+                    if tagframe.has_key('src') and tagframe['src'] in self.tags['iframe']:
+                        self.url=urlparse.urljoin(self.url,tagframe['src'])
+                        try:
+                            f=urllib.urlopen(self.url)
+                            self.url=f.geturl()
+                            self.resulturl=self.url
+                            soup=BeautifulSoup(f)
+                        except Exception:
+                            print "an unexpected error!\n"
+                            sys.exit(1)
+                        f.close()
+                        flag=1
+                        break
+                if flag==0:
+                    break  
             f.close()   
             self.tmpurl=self.url  
             forms=soup.findAll('form')
-            
             for form in forms:
                 if self.finish:
                     break
-                if re.search(self.fp,repr(form)) and  (self.server not in self.specaillist[2]): #有效的form表单   
-                        if not ( re.search(r'network_tools_iframe\.asp',self.url) or re.search(self.formsp,repr(form.contents)) ): 
+                if len(forms)>1:
+                    if re.search(self.fp,repr(form)) : 
+                        if not  re.search(self.formsp,repr(form.contents)) : 
                             continue 
-                if self.server in self.specaillist[12]: #特殊的action
-                    if form.has_key('action'):
-                        if form['action'] =='../search/':
-                             continue           
                 self.list={}
                 self.post=0
                 self.tmpurl=self.url
                 if form.has_key('method'):
-                    if form['method'].lower()=='post': #参数提交方式
+                    if form['method'].lower()=='post':
                         self.post=1
                 
-                if form.has_key('action'): #action中有结果提交的目的URL
+                if form.has_key('action'): 
                     self.tmpurl=urlparse.urljoin(self.url,form['action'])
                 inputs=form.findAll('input',{'name':True})       
                 for inp in inputs:
-                     if (not inp.has_key('type')) or ( inp['type'].lower() in ['text','textfield'] ): #text，textfield标签处理
+                     if (not inp.has_key('type')) or ( inp['type'].lower() in ['text','textfield'] ): 
                          if inp.has_key('name') and (inp['name'] not in ["VIA"]):
                              if not ( inp.has_key('value')   and inp['value'] and re.search(self.textp,inp['value']) ):
                                  self.list[inp['name']]=self.ip
-                                 self.flag=1  
+         
                              elif inp.has_key('value'):
                                  self.list[inp['name']]=inp['value']
                                  
-                     elif (inp['type'].lower() in self.attrs) and inp.has_key('value'): #button，submit标签
-                         if not ( inp['type'].lower()=='submit'  and ( re.search(r'QTYPE2',inp['name']) or re.search(self.bsp,inp['value']) ) ):
+                     elif (inp['type'].lower() in self.attrs) and inp.has_key('value'):
+                         if (inp['value'] in self.tags['hidden'] )or ('Dynamic' in self.tags['hidden']):
                              self.list[inp['name']]=inp['value']
                          
-                     elif inp['type'].lower()=='radio' and inp.has_key('value') and re.search(self.radiop,inp['value']):#radio 标签
+                     elif inp['type'].lower()=='radio' and inp.has_key('value') and inp['value'] in self.tags['radio']:
                          self.list[inp['name']]=inp['value']
-                         if (self.server in self.specaillist[10]):
-                                if(inp['name']==cf.items(self.server)[0][0]):
-                                     self.list[inp['name']]=int(cf.items(self.server)[0][1])
                              
-                     elif inp['type'].lower()=='checkbox' and inp.has_key('value') and re.search(self.checkboxp,inp['value']) and (self.server not in self.specaillist[18]): #checkbox标签
+                     elif inp['type'].lower()=='checkbox' and inp.has_key('value') and inp['value'] in self.tags['checkbox']:
                          self.list[inp['name']]=inp['value']
                      elif inp['type'].lower()=='button' and inp.has_key('value') and re.search(self.buttonp,inp['value']):
                          self.list[inp['name']]=inp['value']
 		
-		#select标签取有效值
+	   #select标签取有效值
                 selects=form.findAll('select')
                 flag=0
                 for select in selects:
                     options=select.findAll('option')
                     for option in options:
-                        if (self.server in self.specaillist[14]) and select['name']=='routers':
+                        if (self.server in self.specaillist[2]) and (select['name'] in self.tags['select']):
                             self.list[select['name']]=option.next.split('\n')[0]
                             break
-                        if option.has_key('value') and re.search(self.optionp,option['value']):
+                        if option.has_key('value') and option['value'] in self.tags['option']:
                             self.list[select.get('name')]=option['value']
                             break
 
 
                      #多源服务器
-                    self.number=0
-                    if self.server in self.specaillist[11]: #某些网站对标签固定要求
-                            self.list[cf.items(self.server)[0][0]]=cf.items(self.server)[0][1]      
+                    self.number=0  
                     if select.has_key('name'):
-                        if (self.server in self.specaillist[0]) and re.search(self.selectp,select['name']) :
+                        if (self.server in self.specaillist[0]) and select['name'] in self.tags['select'] :
                             i=1
                             for option in options:
+                                if option.has_key('value') and option['value'] in self.tags['option']:
+                                    break
                                 if self.id==i:
-                                    if self.server in self.specaillist[13]: #需要解析字符串提取有效值
+                                    if self.server in self.specaillist[2]: #需要解析字符串提取有效值
                                         self.list[select['name']]=option.next.split('\n')[0]
                                     else:
                                         self.list[select['name']]=option['value']                  
@@ -344,73 +352,8 @@ class gettrace:
             else:
                 pass             
 
-    def m3(self):                                                 #第一次traceroute无效，重新一次traceroute
-        try:
-            headers = ('User-Agent','Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11')
-            opener = urllib2.build_opener()
-            opener.addheaders = [headers]
-            f=opener.open(self.resulturl) 
-            soup=BeautifulSoup(f)
-        except :
-            pass
-        else:
-            f.close()
-            self.tmpurl=self.url
-            forms=soup.findAll('form')
-            for form in forms:
-                if self.finish:
-                    break
-                if re.search(self.fp,repr(form)) and  (self.server not in self.specaillist[2]):   
-                    if not ( re.search(r'network_tools_iframe\.asp',self.url) or re.search(self.formsp,repr(form.contents)) ):
-                        continue
-
-                    
-                self.list={}
-                self.post=0
-                self.tmpurl=self.url
-                if form.has_key('method') and form['method'].lower()=='post':
-                    self.post=1
-                if form.has_key('action'):
-                        self.tmpurl=urlparse.urljoin(self.tmpurl,form['action'])
-
-            	inputs=form.findAll('input',{'name':True})
-
-                for inp in inputs:
-                    if  (not inp.has_key('type'))  or  ( inp['type'].lower() in ['text','textfield'] ):
-                        if inp.has_key('name') and (inp['name'] not in ["VIA"]):
-                            if not ( inp.has_key('value')and inp['value'] and re.search(self.textp,inp['value']) ):
-                                self.list[inp['name']]=self.ip
-                                self.flag=1    
-                            elif inp.has_key('value'):
-                                self.list[inp['name']]=inp['value']
-                    elif inp['type'].lower() in self.attrs and inp.has_key('value'):
-                        if not ( inp['type'].lower()=='submit'  and ( re.search(r'QTYPE2',inp['name']) or re.search(r'\bmtr\b|\bping\b|\bPing\b|Do\s+NSLookup|^Reset\s+Form$|^Defaults$|^Clear\s+Form$|^Abort$',inp['value']) ) ):
-                             self.list[inp['name']]=inp['value']
-        
-                        
-                    elif inp['type'].lower()=='radio' and inp.has_key('value') and re.search(self.radiop,inp['value']):
-                        self.list[inp['name']]=inp['value']
-                             
-                    elif inp['type'].lower()=='checkbox' and inp.has_key('value') and re.search(self.checkboxp,inp['value']) and (self.server not in self.specaillist[18]):
-                        self.list[inp['name']]=inp['value']
-                    elif inp['type'].lower()=='button' and inp.has_key('value') and re.search(self.buttonp,inp['value']):
-                        self.list[inp['name']]=inp['value']
-	       	selects=form.findAll('select')
-                for select in selects:
-                    options=select.findAll('option')
-                    for option in options:
-                        if option.has_key('value') and re.search(self.optionp,option['value']):
-                            self.list[select.get('name')]=option['value']
-                            break
-                        elif (not option.has_key('value') ) and (option.string!=None)and re.search(r'TraceRoute\(TW\)|^No$|\b3\b|oslo-gw\.uninett\.no',option.string):
-                            self.list[select.get('name')]=option.string
-                            break        
-                if self.list:
-                    self.show()
-            else:
-                pass
     
-    def m4(self):         #直接打开输入目的IP mechanize
+    def  DirectMechanize(self):         #直接打开输入目的IP mechanize
         try:
             br=mechanize.Browser()
             f=br.open(self.url)
@@ -423,13 +366,12 @@ class gettrace:
                 print "timeout!",self.server,"\n"
             else:
                 pattern=re.compile(r'isindex',re.I)  
-                if re.search(pattern,text):
-                    self.flag=1
+                if re.search(pattern,text):   
                     self.show() 
       
         
     
-    def m5(self):         #直接打开输入目的IP urllib
+    def  DirectRequest(self):         #直接打开输入目的IP urllib
         try:
             request=Request(self.url)
             f=urlopen(request)
@@ -443,10 +385,10 @@ class gettrace:
             else:
                 pattern=re.compile(r'isindex',re.I)  
                 if re.search(pattern,text):
-                    self.flag=1   
+  
                     self.show()         
 
-    def m6(self):           #一部分输入不在From表单中
+    def  NotInForm(self):           #一部分输入不在From表单中
         try:
             br=mechanize.Browser()
             f=br.open(self.url)
@@ -459,7 +401,7 @@ class gettrace:
                 flag=0
                 tagiframes=soup.findAll('iframe')
                 for tagiframe in tagiframes:
-                    if tagiframe.has_key('src') and re.search(self.formpiframe,tagiframe['src']):
+                    if tagiframe.has_key('src') and tagiframe['src'] in self.tags['iframe']:
                         self.url=urlparse.urljoin(self.url,tagiframe['src'])
                         try:
                             f=urllib.urlopen(self.url)
@@ -478,15 +420,15 @@ class gettrace:
             forms=soup.findAll('form')
             self.list={}
             for form in forms:
-                if re.search(self.fp,repr(form)) and (self.server not in self.specaillist[2]):  
-                    if not ( re.search(r'network_tools_iframe\.asp',self.url) or re.search(self.fp,repr(form.contents)) ):
-                        continue
-                
+                if len(forms)>1:
+                    if re.search(self.fp,repr(form)) :  
+                        if not  re.search(self.fp,repr(form.contents)) :
+                            continue
                 if form.has_key('method') and form['method'].lower()=='post':
                     self.post=1
-                if form.has_key('action') and (not re.search(self.actionp,form['action'])):  
+                if form.has_key('action'):  
                         self.tmpurl=urlparse.urljoin(self.url,form['action'])
-             
+        
              #   取值在from表单外
             inputs=soup.findAll('input',{'name':True})       
             for inp in inputs:
@@ -496,17 +438,17 @@ class gettrace:
                     if inp.has_key('name') and (inp['name'] not in ["VIA"]):
                         if not ( inp.has_key('value')   and inp['value'] and re.search(self.textp,inp['value']) ):
                             self.list[inp['name']]=self.ip
-                            self.flag=1
+
                         elif inp.has_key('value'):
                             self.list[inp['name']]=inp['value']
                 elif (inp['type'].lower() in self.attrs) and inp.has_key('value'):
-                    if not ( inp['type'].lower()=='submit'  and ( re.search(r'QTYPE2',inp['name']) or re.search(self.bsp,inp['value']) ) ):
+                    if inp['value'] in self.tags['hidden'] :
                         self.list[inp['name']]=inp['value']
                     
-                elif inp['type'].lower()=='radio' and inp.has_key('value') and re.search(self.radiop,inp['value']):
+                elif inp['type'].lower()=='radio' and inp.has_key('value') and inp['value'] in self.tags['radio']:
                     self.list[inp['name']]=inp['value']
 
-                elif inp['type'].lower()=='checkbox' and inp.has_key('value') and re.search(self.checkboxp,inp['value']) and (self.server not in self.specaillist[18]):
+                elif inp['type'].lower()=='checkbox' and inp.has_key('value') and inp['value'] in self.tags['checkbox']:
                     self.list[inp['name']]=inp['value']
                 elif inp['type'].lower()=='button' and inp.has_key('value') and re.search(self.buttonp,inp['value']):
                     self.list[inp['name']]=inp['value']
@@ -517,44 +459,44 @@ class gettrace:
                 options=select.findAll('option')
                   
                 for option in options:
-                    if option.has_key('value') and re.search(self.optionp,option['value']) and select.has_key('name'):
+                    if option.has_key('value') and option['value'] in self.tags['option'] and select.has_key('name'):
                         self.list[select['name']]=option['value']
                         break
-                    elif (not option.has_key('value') ) and re.search(r'TraceRoute\(TW\)|^No$|\b3\b|oslo-gw\.uninett\.no',option.string):
-                        self.list[select['name']]=option.string
-                        break
+                    elif (not option.has_key('value') ) and (option.string!=None) :  #HTML中取值
+                            if option.string in self.tags['option'] :
+                                self.list[select['name']]=option.string
+                            break
                     elif select.has_key('name'):
-                        if select['name']=='router' and (self.server in self.specaillist[15]):
+                        if select['name'] in self.tags['select'] :
                         	self.list[select['name']]=option['value']
-                        	self.post=1
 
             #输入不全部在form表单的特殊多源服务器
             i=0
             for select in selects:
-                if self.server in self.specaillist[16]:    #在script代码中        
-                 if select['name']==cf.items(self.server)[0][1] :
-                    script=soup.findAll('script')
-                    my = re.compile(r'Option(.*)')
-                    mytxt=soup.get_text()
-                    lines=re.findall(my,mytxt)
-                    for line in lines:
-                        if self.id==i:
-                            ops=lines[self.id+2].split('"')
-                            op = ops[3].encode("utf-8") 
-                            self.list[select['name']]=op
-                            self.post=1
-                            self.show()
-                            flag=1
-                        i=i+1
-                if self.server in self.specaillist[17]: #在form表单外的option中
-                 if select['name']==cf.items(self.server)[0][1]  :
-                    i=1
-                    for option in options:
-                        if self.id==i:
-                            self.list[select['name']]=option['value']
-                            self.show()
-                            flag=1
-                        i=i+1
+                if self.server in self.specaillist[3]:    #在script代码中        
+                    if select['name'] in self.tags['select']:
+                        script=soup.findAll('script')
+                        my = re.compile(r'Option(.*)')
+                        mytxt=soup.get_text()
+                        lines=re.findall(my,mytxt)
+                        for line in lines:
+                            if self.id==i:
+                                ops=lines[self.id+2].split('"')
+                                op = ops[3].encode("utf-8") 
+                                self.list[select['name']]=op
+                                self.post=1
+                                self.show()
+                                flag=1
+                            i=i+1
+                if self.server in self.specaillist[4]: #在form表单外的option中
+                    if select['name'] in self.tags['select']:
+                        i=1
+                        for option in options:
+                            if self.id==i:
+                                self.list[select['name']]=option['value']
+                                self.show()
+                                flag=1
+                            i=i+1
             if self.list and flag==0 :
                 self.show()
 
@@ -573,13 +515,13 @@ class gettrace:
                 f=urlopen(self.tmpurl,urllib.urlencode(self.list))
             else:#GET
                 if self.list:
-                        if self.server in self.specaillist[22]:
+                        if self.server in self.specaillist[8]:
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"?router="+self.list['router']+"&query="+self.list['query']+"&parameter="+self.list['parameter'])
-                        elif self.server in self.specaillist[23] :
+                        elif self.server in self.specaillist[9] :
                             self.tmpurl=self.resulturl+"tracert?host="+self.ip
-                        elif self.server in self.specaillist[24] :
+                        elif self.server in self.specaillist[10] :
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"/ajax.php?"+urllib.urlencode(self.list))
-                        elif self.server in self.specaillist[25] :
+                        elif self.server in self.specaillist[11] :
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"?target="+self.ip+"&function=traceroute")
                         else :
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"?"+urllib.urlencode(self.list))
@@ -590,10 +532,6 @@ class gettrace:
                     else:
                         f=urllib.urlopen(self.url+self.ip) 
             soup=BeautifulSoup(f) 
-            if self.server in self.specaillist[21] and self.my5400==0: #特殊的网站，二次提交
-                self.soup=soup
-                self.my5400=1
-                self.m2()
         except :
             pass
         else:
@@ -603,7 +541,7 @@ class gettrace:
                 flag=0
                 tagiframes=soup.findAll('iframe') #结果在iframe中
                 for tagiframe in tagiframes:
-                    if tagiframe.has_key('src') and self.server in self.specaillist[19]:
+                    if tagiframe.has_key('src') and self.server in self.specaillist[5]:
                         if (self.tmpurl)[len(self.tmpurl)-1]!='/' :
                             self.tmpurl+="/"
                         try:
@@ -616,7 +554,7 @@ class gettrace:
                         break 
                 tagiframes=soup.findAll('frame') #结果在frame中
                 for tagiframe in tagiframes:
-                    if tagiframe.has_key('src') and self.server in self.specaillist[20]:
+                    if tagiframe.has_key('src') and self.server in self.specaillist[6]:
                         if (self.tmpurl)[len(self.tmpurl)-1]!='/' :
                             self.tmpurl+="/"
                         try:
@@ -630,7 +568,7 @@ class gettrace:
                 if flag==0:
                     break       
             #提取数据,不同标签依次尝试
-            if(int(cf.get(self.server, "resultlab"))==1):             
+            if(int(cf.get(self.server, "resultlable"))==1):             
                 result=soup.findAll('xmp')
                 if result:                                              
                     for resu in result:
@@ -642,7 +580,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=field
 
-            if(int(cf.get(self.server, "resultlab"))==2):      
+            if(int(cf.get(self.server, "resultlable"))==2):      
                 result=soup.findAll('div')
                 if result:                                              
                     for resu in result:
@@ -654,7 +592,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=field
 
-            if(int(cf.get(self.server, "resultlab"))==3):      
+            if(int(cf.get(self.server, "resultlable"))==3):      
                 result=soup.findAll('textarea')
                 if result:                                            
                     for resu in result:
@@ -667,7 +605,7 @@ class gettrace:
                                 self.rstr+=field
 
 
-            if(int(cf.get(self.server, "resultlab"))==4):      
+            if(int(cf.get(self.server, "resultlable"))==4):      
                 result=soup.findAll('code')
                 if result:                                              
                     for resu in result:
@@ -676,7 +614,7 @@ class gettrace:
                             if re.search(self.p,field):
                                 self.finish=1
                                 self.rstr+=field
-            if(int(cf.get(self.server, "resultlab"))==5):      
+            if(int(cf.get(self.server, "resultlable"))==5):      
                 result=soup.findAll('span')
                 if result:                                        
                     for resu in result:
@@ -688,7 +626,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=field
             
-            if(int(cf.get(self.server, "resultlab"))==6):      
+            if(int(cf.get(self.server, "resultlable"))==6):      
                 result=soup.findAll('p')
                 if result:                                               
                     for resu in result:
@@ -698,7 +636,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=field  
 
-            if(int(cf.get(self.server, "resultlab"))==7):          
+            if(int(cf.get(self.server, "resultlable"))==7):          
                 result=soup.findAll('pre')
                 if result:                              
                     for resu in result:
@@ -710,7 +648,7 @@ class gettrace:
                         if self.finish:  
                             break
 
-            if(int(cf.get(self.server, "resultlab"))==8):                       
+            if(int(cf.get(self.server, "resultlable"))==8):                       
                 result=soup.findAll('pre')
                 if result:                              
                     for resu in result:
@@ -723,7 +661,7 @@ class gettrace:
                                 self.rstr+=field
                         if self.finish:  
                             break
-            if(int(cf.get(self.server, "resultlab"))==9):                      
+            if(int(cf.get(self.server, "resultlable"))==9):                      
                 result=soup.findAll('div')   
                 if result:                                     
                     for resu in result:
@@ -736,7 +674,7 @@ class gettrace:
                                     self.rstr+=field
                         if self.finish:
                             break
-            if(int(cf.get(self.server, "resultlab"))==10):          
+            if(int(cf.get(self.server, "resultlable"))==10):          
                 results=soup.findAll('td')
                 if results:                                           
                     for result in results:
@@ -746,7 +684,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=repr(taga.contents)
 
-            if(int(cf.get(self.server, "resultlab"))==11):      
+            if(int(cf.get(self.server, "resultlable"))==11):      
                 result=soup.findAll('td')
                 if result:                                           
                     for resu in result:
@@ -758,7 +696,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=field
  
-            if(int(cf.get(self.server, "resultlab"))==12):      
+            if(int(cf.get(self.server, "resultlable"))==12):      
                 result=soup.findAll('table')
                 if result:                                               
                     for resu in result:
@@ -770,7 +708,7 @@ class gettrace:
                                 self.finish=1
                                 self.rstr+=field          
 
-            if(int(cf.get(self.server, "resultlab"))==13):   
+            if(int(cf.get(self.server, "resultlable"))==13):   
                 scripts=soup.findAll('script')
                 if scripts:
                     script=scripts[len(scripts)-1]
@@ -780,28 +718,28 @@ class gettrace:
                         self.finish=1
                         self.rstr+=sstr
                                                          
-            if(int(cf.get(self.server, "resultlab"))==14):       
+            if(int(cf.get(self.server, "resultlable"))==14):       
                 bodys=soup.findAll('body')
                 for body in bodys:
                     for content in body.contents:
                         if  content.string==None :
                                     break
-                        if re.search(self.p,repr(content)) or len(re.findall(r'\D{0,1}\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\D{0,1}&nbsp',repr(content)))>4:
+                        if re.search(self.p,repr(content)) or len(re.findall(r'\D{0,1}\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\D{0,1}&nbutton',repr(content)))>4:
                             self.finish=1
                             self.rstr+=repr(content)
 
-            if(int(cf.get(self.server, "resultlab"))==15):      
+            if(int(cf.get(self.server, "resultlable"))==15):      
                 result=re.findall(self.pat,repr(soup.contents))
                 if result and len(result)>5 :
                     self.finish=1
                     self.rstr+=repr(soup.contents)
                             
-            if self.flag==0: #需要二次traceroute
-                if self.rstr:
-                    self.resulturl=self.tmpurl
+            if  not self.rstr and self.server in self.specaillist[7]: #需要二次traceroute
                 self.finish=0
-                self.rstr=""
-                self.post=0
+                self.soup = soup
+                self.flag = 0
+                functionname= "self."+self.FunName[int(cf.get(self.server, "function"))-1]+"()"
+                exec(functionname)
             if self.rstr:
                     print "from "+self.url+"to "+self.ip+""
                     today=datetime.date.today()
@@ -884,5 +822,16 @@ def main():
         tid=sys.argv[3]
         gt=gettrace(url,ip,tid)
         gt()
+
+
 if __name__=='__main__':
-    main()
+    def handler(signum, frame):
+        raise AssertionError
+    try:
+         signal.signal(signal.SIGALRM, handler)
+         signal.alarm(600)
+         main()
+         signal.alarm(0)
+    except AssertionError:
+            print " Traceroute timeout"
+            os._exit(0)
