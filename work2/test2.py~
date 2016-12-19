@@ -1,4 +1,0 @@
-import requests
-s = requests.session()
-r=s.get("http://lg.he.net/")
-print r.headers

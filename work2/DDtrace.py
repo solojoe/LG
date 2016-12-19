@@ -1,5 +1,6 @@
 #!/usr/bin/python
 #encoding=utf-8
+
 import sys
 import urllib
 import urllib2  
@@ -473,7 +474,7 @@ class gettrace:
             #输入不全部在form表单的特殊多源服务器
             i=0
             for select in selects:
-                if self.server in self.specaillist[3]:    #在script代码中        
+                if self.server in self.specaillist[0]:    #在script代码中        
                     if select['name'] in self.tags['select']:
                         script=soup.findAll('script')
                         my = re.compile(r'Option(.*)')
@@ -488,7 +489,7 @@ class gettrace:
                                 self.show()
                                 flag=1
                             i=i+1
-                if self.server in self.specaillist[4]: #在form表单外的option中
+                if self.server in self.specaillist[3]: #在form表单外的option中
                     if select['name'] in self.tags['select']:
                         i=1
                         for option in options:
@@ -515,13 +516,13 @@ class gettrace:
                 f=urlopen(self.tmpurl,urllib.urlencode(self.list))
             else:#GET
                 if self.list:
-                        if self.server in self.specaillist[8]:
+                        if self.server in self.specaillist[7]:
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"?router="+self.list['router']+"&query="+self.list['query']+"&parameter="+self.list['parameter'])
-                        elif self.server in self.specaillist[9] :
+                        elif self.server in self.specaillist[8] :
                             self.tmpurl=self.resulturl+"tracert?host="+self.ip
-                        elif self.server in self.specaillist[10] :
+                        elif self.server in self.specaillist[9] :
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"/ajax.php?"+urllib.urlencode(self.list))
-                        elif self.server in self.specaillist[11] :
+                        elif self.server in self.specaillist[10] :
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"?target="+self.ip+"&function=traceroute")
                         else :
                             self.tmpurl=urlparse.urljoin(self.tmpurl,"?"+urllib.urlencode(self.list))
@@ -541,7 +542,7 @@ class gettrace:
                 flag=0
                 tagiframes=soup.findAll('iframe') #结果在iframe中
                 for tagiframe in tagiframes:
-                    if tagiframe.has_key('src') and self.server in self.specaillist[5]:
+                    if tagiframe.has_key('src') and self.server in self.specaillist[4]:
                         if (self.tmpurl)[len(self.tmpurl)-1]!='/' :
                             self.tmpurl+="/"
                         try:
@@ -554,7 +555,7 @@ class gettrace:
                         break 
                 tagiframes=soup.findAll('frame') #结果在frame中
                 for tagiframe in tagiframes:
-                    if tagiframe.has_key('src') and self.server in self.specaillist[6]:
+                    if tagiframe.has_key('src') and self.server in self.specaillist[5]:
                         if (self.tmpurl)[len(self.tmpurl)-1]!='/' :
                             self.tmpurl+="/"
                         try:
@@ -734,7 +735,7 @@ class gettrace:
                     self.finish=1
                     self.rstr+=repr(soup.contents)
                             
-            if  not self.rstr and self.server in self.specaillist[7]: #需要二次traceroute
+            if  not self.rstr and self.server in self.specaillist[6]: #需要二次traceroute
                 self.finish=0
                 self.soup = soup
                 self.flag = 0

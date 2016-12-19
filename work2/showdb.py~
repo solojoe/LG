@@ -1,8 +1,0 @@
-#!/usr/bin/python
-import MySQLdb
-con=MySQLdb.connect(host='localhost',user='root',passwd='19941017')
-cur=con.cursor()
-con.select_db('practice')
-count=cur.execute("select link from AStable where asn=1267")
-print cur.fetchall()
-cur.close()

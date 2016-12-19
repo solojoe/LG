@@ -7,7 +7,7 @@ import socket
 import MySQLdb
 from threading import Thread
 import re
-import socket
+import time
 from DDtrace import gettrace
 
 socket.setdefaulttimeout(60)

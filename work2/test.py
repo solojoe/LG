@@ -30,9 +30,9 @@ def main():
     result=cur2.fetchall()         
                      
     tgtip="202.118.236.190"
-    for i in range(0,count1,100):                
+    for i in range(0,count1,1):                
     	    threads=[]
-            for j in range(100):
+            for j in range(1):
             	pos=i+j
 		if pos>=count1:
 		    break
@@ -44,7 +44,7 @@ def main():
             for a in range(length):
             	threads[a].start()
        	    for a in range(length):
-            	threads[a].join(2)   
+            	threads[a].join()   
                 
         
 if __name__=='__main__':
