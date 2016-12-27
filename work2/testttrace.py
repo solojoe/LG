@@ -888,7 +888,7 @@ class gettrace:
                 self.finish=1
                 timeforMechanizeFormt="%Y-%m-%d %X"
                 ltime=time.strftime(timeforMechanizeFormt,time.localtime())
-                value=(self.id,self.my559,ltime)
+                value=(self.id,self.my559,'60')
                 sql="select * from Ttable where id='%s' and tid='%s'"%(self.id,self.my559)
                 con=MySQLdb.connect(host=cf.get("db", "db_host"),user=cf.get("db", "db_user"),passwd=cf.get("db", "db_pass"))
                 cur=con.cursor()
