@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="/static/css/bootstrap.css">
+<link rel="stylesheet" href="/static/css/bootstrap-table.css">
+<script src="/static/js/jquery.js"></script>
+<script src="/static/js/bootstrap.min.js"></script>
+<script src="/static/js/bootstrap-table.js"></script>
+<script src="/static/js/bootstrap-table-zh-CN.js"></script>
+    <title>Looking Class</title>
+</head>
+<body>
+<nav class="navbar navbar-inverse ">
+      	<div class="container">
+        	<div class="navbar-header">
+          	<a class="navbar-brand" >Looking glass</a>
+        	</div>
+        	<div id="navbar" class="collapse navbar-collapse">
+          	<ul class="nav navbar-nav">
+            	<li class="active"><a href="">首页</a></li>
+            	<li><a href="">测量结果</a></li>
+            	<li><a href="#contact">Contact</a></li>
+          	</ul>
+        	</div><!--/.nav-collapse -->
+     	</div>
+</nav>
+ <div class="container theme-showcase" role="main">
+ 	<h3 class="text-left text-info">测量点信息</h3>
+ 	<form  action="/trace_form"  method="POST">
+ 	 {% csrf_token %}
+	<table 	data-toggle="table "
+		id="sourcetable"  
+		data-detail-view="true"
+               	data-detail-formatter="detailFormatter"
+               	>
+   	 		<thead>
+        			<tr>
+            			<th data-field="id" data-sortable="true">ID</th>
+            			<th  data-field="location" data-sortable="true">Location</th>
+            			<th  data-field="url" data-formatter="operateFormatter">Link</th>
+            			<th  data-field="asn"  data-sortable="true">AS Number</th>
+            			<th  data-field="isp" ></th>
+            			<th  data-field="tid" ></th>
+            			<th  data-field="sid" ></th>
+            			<th  data-field="country" ></th>
+            			<th data-field="state" data-checkbox="true">Select</th>
+        			</tr>
+    			</thead>
+    			<tbody>
+        				{% for info in result %}
+        				<tr>
+            				<td>{{info.0}}</td>
+            				<td>{{info.1}}</td>
+            				<td>{{info.2}}</td>
+            				<td>{{info.3}}</td>
+            				<td>{{info.5}}</td>
+            				<td>{{info.6}}</td>
+            				<td>{{info.7}}</td>
+            				<td>{{info.8}}</td>
+            				<td ></td>
+       	 			</tr>
+        				{% endfor %}
+   			 </tbody>
+	</table>
+	</br>
+	<fieldset> <label contenteditable="true"></label> <input placeholder="目的IP" type="text"  name="ip"> 
+	<input type="hidden" name="source" id="source"  value="" /></br></br>
+	<button id="button" class="btn  btn-info"  type="submit" >Go Trace</button>
+	</fieldset>
+	</form>
+</div> 
+
+<script type="text/javascript">
+    $('#sourcetable').bootstrapTable({
+      search: true,  //是否显示搜索框功能
+      //pagination: true,  //是否分页
+      showRefresh: true, //是否显示刷新功能 
+      showToggle: true,
+     // showColumns: true,
+      sidePagination: "client",
+      height: 500,  
+      clickToSelect: true,
+      columns:  
+                    [{  
+                        title: 'ID',//标题  可不加  
+                        formatter: function (value, row, index) {  
+                            return index+1;  
+                        }  
+                    }]  
+
+
+    });
+   $('#sourcetable').bootstrapTable('hideColumn', 'isp');
+   $('#sourcetable').bootstrapTable('hideColumn', 'tid');
+   $('#sourcetable').bootstrapTable('hideColumn', 'sid');
+   $('#sourcetable').bootstrapTable('hideColumn', 'country');
+    function detailFormatter(index,row,value)
+    {	
+    	var html=[];
+    	html.push(' <p>&emsp; &emsp;AS_ISP:'+row.isp+'</p>');
+    	html.push(' <p>&emsp; &emsp;AS_country:'+row.country+'</p>');
+ 	return html;
+    }
+    var $table= $('#sourcetable'),$button=$('#button'),selections = [];;
+
+   $(function () {
+        $button.click(function () {
+        	   document.getElementById("source").value =JSON.stringify( $table.bootstrapTable('getAllSelections') );
+        });
+    });
+   function operateFormatter(value, row, index) {
+        return [
+            '<a href="' + value + '" target="_blank">' + value + '</a>',
+        ].join('');
+   }
+
+</script>
+</body>
+</html>

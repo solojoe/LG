@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="/static/css/bootstrap.css">
+<link rel="stylesheet" href="/static/css/bootstrap-table.css">
+<script src="/static/js/jquery.js"></script>
+<script src="/static/js/bootstrap.min.js"></script>
+<script src="/static/js/bootstrap-table.js"></script>
+<script src="/static/js/bootstrap-table-zh-CN.js"></script>
+<script src="/static/js/extensions/export/bootstrap-table-export.js"></script>
+ <script src="/static/js/tableExport.js"></script>
+    <title>Looking Class</title>
+</head>
+<body>
+<nav class="navbar navbar-inverse ">
+      	<div class="container">
+        	<div class="navbar-header">
+          	<a class="navbar-brand" >Looking glass</a>
+        	</div>
+        	<div id="navbar" class="collapse navbar-collapse">
+          	<ul class="nav navbar-nav">
+            	<li class=""><a href="/">首页</a></li>
+            	<li class="active"><a >测量结果</a></li>
+            	<li><a href="/1234">Contact</a></li>
+          	</ul> 
+        	</div><!--/.nav-collapse -->
+     	</div>
+</nav>
+ <div class="container theme-showcase" role="main">
+
+  
+
+  <table  class="table " id="cusTable" data-show-export="true" data-cache="false">  
+      <thead>
+              <tr>
+                  <th data-field="Id"></th>
+              </tr>
+          </thead>
+          <tbody>
+         </tbody>
+</table>
+  </div>
+</div> 
+<script type="text/javascript">
+             var   mess='<div class="progress"> <div class="progress-bar progress-bar-info progress-bar-striped active" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" style="width: 60%"><span class="sr-only">45% Complete</span> </div></div>'
+            $("#cusTable").bootstrapTable('destroy').bootstrapTable({  
+            method: "get",  //使用get请求到服务器获取数据  
+            url: "/ajax_get", //获取数据的Servlet地址    n
+            dataType: 'json',  
+            pagination: true,  //是否分页 
+            sidePagination: "client",
+            search: true, 
+            pageSize: 1,
+            exportDataType: "all",  
+            formatLoadingMessage: function () {  
+              return  mess;  
+            },
+            onClickRow:function(row,$element){
+                 return "111";
+            },
+          });
+</script>
+</body>
+</html>

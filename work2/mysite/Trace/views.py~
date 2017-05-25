@@ -1,0 +1,43 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.views.decorators import csrf
+import models
+import json
+from Ddata import *
+
+# Create your views here.
+
+Allwork=[]
+def index(request):
+    del Allwork[:]
+    sourcelist=models.Ttable.objects.exclude(time="0")
+    result=[]
+    ind=0
+    for i in sourcelist:
+	j=models.Astable.objects.get(id=i.id)
+        k=models.Asdetail.objects.get(as_field=j.asn)
+	ind=ind+1
+	result.append([ind,i.location,j.link,j.asn,j.info,k.isp,i.tid,i.id,k.country])
+    return render(request, 'home.html',locals()) #locals()返回一个包含当前作用域里面的所有变量和它们的值的字典
+
+def trace_form(request):
+    del Allwork[:]
+    sourcelist=json.loads(request.POST['source'])
+    for i in sourcelist:
+	Allwork.append([i["url"],i["tid"],request.POST["ip"],i["id"]])
+    print Allwork
+    return render(request, "trace.html")
+
+def ajax_get(request):
+    response = []
+    work_manager =  WorkManager(Allwork, 100) 
+    work_manager.wait_allcomplete()
+    for i in Result:
+	dic={} 
+	dic["Id"]=i[1]
+	response.append(dic)
+    del Allwork[:]
+    return HttpResponse(json.dumps(response))

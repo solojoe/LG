@@ -1,0 +1,19 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.views.decorators import csrf
+import models
+import json
+
+# Create your views here.
+
+
+
+def index(request):
+    sqlret=models.Astable.objects.all()
+    return render(request, 'home.html',locals()) #locals()返回一个包含当前作用域里面的所有变量和它们的值的字典
+
+def trace(request):
+    return render(request, '1.html',locals())
